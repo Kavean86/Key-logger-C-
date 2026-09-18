@@ -4,6 +4,7 @@
 #include <linux/input.h>
 #include <sys/ioctl.h>
 #include <cctype>
+#include <fstream>
 #include "database.cpp"
 
 using namespace std;
@@ -251,6 +252,11 @@ int main()
 
 
         cout << special_color(code)<< key << RESET << flush << " ";
+
+	const char* home = getenv("HOME");
+	ofstream file(string(home) + "/.ohterminal",ios::app);
+	file<<special_color(code)<< key << RESET << " ";
+	file.close();
     }
 
 
