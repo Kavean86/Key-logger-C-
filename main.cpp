@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <linux/input.h>
+#include <sys/ioctl.h>
 #include <cctype>
 #include "database.cpp"
 
@@ -76,15 +77,97 @@ string special_color(int code)
 }
 
 
+string find_keyboard()
+{
+    char name[256];
+
+    for (int i = 0; i < 32; i++)
+    {
+        string device = "/dev/input/event" + to_string(i);
+
+        int fd = open(device.c_str(), O_RDONLY);
+
+        if (fd < 0)
+            continue;
+
+
+        unsigned long ev_bits[EV_MAX / (sizeof(unsigned long) * 8) + 1] = {};
+
+        if (ioctl(fd, EVIOCGBIT(0, sizeof(ev_bits)), ev_bits) < 0)
+        {
+            close(fd);
+            continue;
+        }
+
+
+        if (!(ev_bits[EV_KEY / (sizeof(unsigned long) * 8)] &
+              (1UL << (EV_KEY % (sizeof(unsigned long) * 8)))))
+        {
+            close(fd);
+            continue;
+        }
+
+
+        unsigned long key_bits[KEY_MAX / (sizeof(unsigned long) * 8) + 1] = {};
+
+        if (ioctl(fd,
+                  EVIOCGBIT(EV_KEY, sizeof(key_bits)),
+                  key_bits) < 0)
+        {
+            close(fd);
+            continue;
+        }
+
+
+        bool has_a =
+            key_bits[KEY_A / (sizeof(unsigned long) * 8)] &
+            (1UL << (KEY_A % (sizeof(unsigned long) * 8)));
+
+
+        bool has_enter =
+            key_bits[KEY_ENTER / (sizeof(unsigned long) * 8)] &
+            (1UL << (KEY_ENTER % (sizeof(unsigned long) * 8)));
+
+
+        if (has_a && has_enter)
+        {
+            if (ioctl(fd, EVIOCGNAME(sizeof(name)), name) >= 0)
+                cout << "Device: " << name << endl;
+
+            close(fd);
+
+            return device;
+        }
+
+
+        close(fd);
+    }
+
+    return "";
+}
+
+
 int main()
 {
-    int path = open("/dev/input/event1", O_RDONLY);
+    string keyboard = find_keyboard();
+
+    if (keyboard.empty())
+    {
+        cerr << "Keyboard event device not found\n";
+        return 1;
+    }
+
+    cout << "Keyboard: " << keyboard << endl;
+
+
+    int path = open(keyboard.c_str(), O_RDONLY);
 
     if (path < 0)
     {
         perror("open");
         return 1;
     }
+
 
     input_event event;
 
@@ -101,12 +184,14 @@ int main()
         int code = event.code;
         int value = event.value;
 
+
         if (code == KEY_LEFTSHIFT ||
             code == KEY_RIGHTSHIFT)
         {
             shift = (value != 0);
             continue;
         }
+
 
         if (code == KEY_CAPSLOCK && value == 1)
         {
@@ -118,6 +203,7 @@ int main()
         if (value != 1)
             continue;
 
+
         auto it = key_db.find({code, 1});
 
 
@@ -127,16 +213,19 @@ int main()
 
         string key = it->second;
 
+
         if (code == KEY_SPACE)
         {
             cout << " " << flush;
             continue;
         }
 
+
         if (key.length() == 1 &&
             isalpha(static_cast<unsigned char>(key[0])))
         {
             bool upper = shift ^ caps;
+
 
             if (upper)
                 key[0] =
@@ -145,10 +234,12 @@ int main()
                 key[0] =
                     tolower(static_cast<unsigned char>(key[0]));
 
+
             cout << key << flush;
 
             continue;
         }
+
 
         if (key.length() == 1 &&
             isdigit(static_cast<unsigned char>(key[0])))
@@ -158,7 +249,8 @@ int main()
             continue;
         }
 
-        cout << special_color(code)<< key<< RESET<< flush<<" ";
+
+        cout << special_color(code)<< key << RESET << flush << " ";
     }
 
 
