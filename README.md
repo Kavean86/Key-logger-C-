@@ -2,40 +2,53 @@
 
 A lightweight **Linux keyboard event monitor written in C++** using the Linux input event interface.
 
-The project reads keyboard events directly from `/dev/input/eventX`, maps Linux keyboard event codes to human-readable keys, handles `Shift` and `Caps Lock`, and displays special keys with different terminal colors.
+The project reads keyboard events directly from Linux input devices through `/dev/input/event*`, automatically detects the appropriate keyboard input device, processes low-level `input_event` structures, maps Linux keyboard event codes to human-readable names, handles modifier states, and displays keyboard input in a readable and colorized format.
 
-This project was created to explore **Linux input devices, low-level event handling, file descriptors, C++ system programming, and keyboard event processing**.
+This project was created as a practical exploration of **Linux input devices, low-level event handling, file descriptors, C++ system programming, keyboard event processing, and the Linux input subsystem**.
 
 > ⚠️ **Educational Use Only:** Use this project only on systems you own or where you have explicit permission to monitor keyboard input. Keyboard event monitoring can expose sensitive information such as passwords and private messages.
+
+---
 
 ## Features
 
 * ⌨️ Reads keyboard events directly from Linux input devices
 * 🐧 Designed for Linux
 * ⚙️ Written in C++
-* 🔌 Uses `/dev/input/event1`
+* 🔍 **Automatically detects the keyboard input device**
+* 🔌 Works with `/dev/input/event*`
 * 🧩 Uses Linux `input_event` structures
-* 🔤 Converts key codes into readable characters
+* 🔤 Converts Linux keyboard event codes into human-readable key names
 * 🔠 Supports `Shift`
 * 🔡 Supports `Caps Lock`
-* ␣ Handles `Space`
-* 🎨 Uses different terminal colors for special keys
+* 🧠 Uses XOR logic for `Shift` and `Caps Lock` state handling
 * 🔢 Supports number keys
+* 🔤 Supports alphabetic keys
+* ␣ Supports `Space`
+* ↩️ Supports `Enter`
+* ↹ Supports `Tab`
+* ⌫ Supports `Backspace`
+* 🎛️ Supports modifier keys
 * ⌨️ Supports function keys from `F1` to `F12`
 * 🧭 Supports navigation keys
+* ⬆️ Supports arrow keys
+* 🏠 Supports `Home` and `End`
+* 📍 Supports `Insert` and `Delete`
 * 🔢 Includes numpad key mappings
+* 🎨 Uses ANSI terminal colors for special keys
+* 🗂️ Uses a separate keyboard database for key mappings
+* 🔍 Filters non-keyboard events
+* 🖥️ Displays processed keyboard events directly in the terminal
+
+---
 
 ## How It Works
 
 Linux exposes input devices through the `/dev/input/` interface.
 
-This project opens:
+Instead of relying on normal terminal input, this project works directly with the Linux input subsystem.
 
-```text
-/dev/input/event1
-```
-
-and continuously reads `input_event` structures.
+The program searches available input event devices and automatically identifies the appropriate keyboard device.
 
 ```text
 Keyboard
@@ -44,7 +57,10 @@ Keyboard
 Linux Input Subsystem
    │
    ▼
-/dev/input/event1
+/dev/input/event*
+   │
+   ▼
+Automatic Keyboard Detection
    │
    ▼
 input_event
@@ -52,34 +68,108 @@ input_event
    ▼
 C++ Event Processing
    │
-   ├── Key Mapping
+   ├── Event Filtering
+   ├── Key Code Extraction
+   ├── Keyboard Database Lookup
+   ├── Modifier State Handling
    ├── Shift Handling
    ├── Caps Lock Handling
-   └── Special Key Coloring
+   ├── Character Conversion
+   ├── Special Key Detection
+   └── Terminal Formatting
    │
    ▼
-Terminal Output
+Readable Keyboard Output
 ```
 
-The program ignores events that are not keyboard events:
+The program filters events so that only keyboard events are processed:
 
 ```cpp
 if (event.type != EV_KEY)
     continue;
 ```
 
-It then extracts the key code and event value:
+The keyboard event code and event value are then extracted:
 
 ```cpp
 int code = event.code;
 int value = event.value;
 ```
 
-The key code is looked up in the project's keyboard database.
+The event code is looked up in the project's keyboard database and processed according to its type and current keyboard state.
+
+---
+
+## Automatic Keyboard Detection
+
+One of the project's implemented features is **automatic keyboard input-device detection**.
+
+Instead of depending on a hardcoded device such as:
+
+```text
+/dev/input/event1
+```
+
+the program searches the available Linux input devices and identifies the appropriate keyboard device automatically.
+
+This makes the program more portable across different Linux systems where the keyboard may be assigned to a different event number.
+
+Conceptually:
+
+```text
+/dev/input/
+    │
+    ├── event0
+    ├── event1
+    ├── event2
+    ├── event3
+    └── ...
+          │
+          ▼
+   Device Detection
+          │
+          ▼
+   Keyboard Device
+          │
+          ▼
+   Event Processing
+```
+
+This removes the need for the user to manually determine which `/dev/input/eventX` device corresponds to the keyboard.
+
+---
+
+## Linux `input_event`
+
+The project works directly with the Linux `input_event` structure provided by:
+
+```cpp
+#include <linux/input.h>
+```
+
+Keyboard activity is exposed by Linux as input events.
+
+The program primarily processes:
+
+```cpp
+event.type == EV_KEY
+```
+
+The event value can represent different states of a key:
+
+```text
+0 → Key released
+1 → Key pressed
+2 → Key repeat
+```
+
+This allows the program to distinguish between key presses, releases, and repeated key events.
+
+---
 
 ## Keyboard Database
 
-The file `database.cpp` contains a mapping between Linux keyboard event codes and readable key names.
+The project uses a separate `database.cpp` file containing mappings between Linux keyboard event codes and human-readable key names.
 
 For example:
 
@@ -109,41 +199,89 @@ Navigation keys are included as well:
 {{111, 1}, "DELETE"},
 ```
 
-## Shift and Caps Lock
+Keeping these mappings in a separate file allows the keyboard database to remain independent from the main event-processing logic.
 
-The program keeps track of the current `Shift` state:
+---
+
+## Modifier Key Handling
+
+The program keeps track of modifier-key states instead of treating every keyboard event as an isolated character.
+
+For example, the current `Shift` state is stored using:
 
 ```cpp
 bool shift = false;
 ```
 
-It also maintains a separate `Caps Lock` state:
+The program also tracks the current `Caps Lock` state:
 
 ```cpp
 bool caps = false;
 ```
 
-For alphabetic characters, the final case is determined using:
+For alphabetic characters, the final case is determined using XOR logic:
 
 ```cpp
 bool upper = shift ^ caps;
 ```
 
-This allows combinations such as:
+This produces the expected behavior:
 
 ```text
-Shift + A       → A
-Caps Lock + A   → A
-Shift + Caps+A  → a
+Shift + A             → A
+Caps Lock + A         → A
+Shift + Caps Lock+A   → a
 ```
 
-## Colored Special Keys
+This allows the program to reproduce the interaction between `Shift` and `Caps Lock` instead of simply mapping each key to a fixed character.
 
-Special keys are displayed using ANSI terminal colors.
+---
 
-The project defines several colors:
+## Special Key Handling
+
+The project distinguishes normal printable keys from special keyboard keys.
+
+Supported special keys include:
+
+```text
+ESC
+TAB
+ENTER
+BACKSPACE
+SPACE
+LEFT CTRL
+LEFT ALT
+SHIFT
+CAPS LOCK
+ARROW KEYS
+HOME
+END
+INSERT
+DELETE
+F1 - F12
+NUMPAD KEYS
+```
+
+Special keys are displayed using readable names instead of being treated as normal characters.
+
+Example:
+
+```text
+Hello[SPACE]World[ENTER]
+```
+
+The exact representation is colorized in the terminal.
+
+---
+
+## Colored Terminal Output
+
+The project uses ANSI escape sequences to visually distinguish special keys.
+
+The following terminal colors are used:
 
 ```cpp
+const string RESET   = "\033[0m";
 const string RED     = "\033[31m";
 const string GREEN   = "\033[32m";
 const string YELLOW  = "\033[33m";
@@ -153,11 +291,9 @@ const string CYAN    = "\033[36m";
 const string WHITE   = "\033[37m";
 ```
 
-Different special keys are assigned different colors.
+Different categories of special keys are assigned different colors.
 
-For example:
-
-| Key                 | Color   |
+| Key / Category      | Color   |
 | ------------------- | ------- |
 | `ESC`               | Red     |
 | `TAB`               | Green   |
@@ -171,7 +307,80 @@ For example:
 | `F5` - `F8`         | Blue    |
 | `F9` - `F12`        | Magenta |
 
-Normal letters and numbers are displayed without the special-key formatting.
+Normal letters and numbers are displayed without special-key formatting.
+
+---
+
+## Supported Keyboard Input
+
+The current keyboard database includes mappings for several categories of keys.
+
+### Alphabetic Keys
+
+```text
+A - Z
+```
+
+### Number Keys
+
+```text
+0 - 9
+```
+
+### Modifier Keys
+
+```text
+SHIFT
+LEFT CTRL
+LEFT ALT
+CAPS LOCK
+```
+
+### Control Keys
+
+```text
+ESC
+TAB
+ENTER
+BACKSPACE
+SPACE
+```
+
+### Function Keys
+
+```text
+F1
+F2
+F3
+F4
+F5
+F6
+F7
+F8
+F9
+F10
+F11
+F12
+```
+
+### Navigation Keys
+
+```text
+UP
+DOWN
+LEFT
+RIGHT
+HOME
+END
+INSERT
+DELETE
+```
+
+### Numpad
+
+The project also contains mappings for numpad keys.
+
+---
 
 ## Project Structure
 
@@ -190,27 +399,37 @@ Contains the main event-processing logic.
 
 Responsibilities include:
 
-* Opening the input event device
-* Reading keyboard events
-* Detecting key presses
-* Handling Shift
-* Handling Caps Lock
-* Looking up key names
-* Formatting special keys
-* Printing the result
+* Detecting the keyboard input device
+* Opening the selected input device
+* Reading `input_event` structures
+* Filtering keyboard events
+* Detecting key states
+* Processing keyboard event codes
+* Tracking `Shift`
+* Tracking `Caps Lock`
+* Looking up keyboard mappings
+* Detecting special keys
+* Formatting special-key output
+* Applying terminal colors
+* Printing processed events
 
 ### `database.cpp`
 
 Contains the keyboard event-code database.
 
-It maps Linux keyboard codes to human-readable names.
+It maps Linux keyboard event codes to human-readable names and provides the mapping layer used by the main event-processing logic.
+
+---
 
 ## Requirements
 
 * Linux
 * C++ compiler
 * Linux input subsystem
-* Access to the selected `/dev/input/event*` device
+* Access to Linux input devices
+* Sufficient permissions to read the selected input device
+
+---
 
 ## Compilation
 
@@ -220,109 +439,157 @@ Compile the project with:
 g++ main.cpp -o keylogger
 ```
 
+---
+
 ## Running
 
-The program currently uses:
-
-```text
-/dev/input/event1
-```
-
-Run it with sufficient permissions:
+Run the program with sufficient permissions:
 
 ```bash
 sudo ./keylogger
 ```
 
-Depending on the system, the keyboard may be associated with a different event device.
+The program automatically searches for the appropriate keyboard input device.
 
-You can inspect available input devices with:
+There is no need to manually specify:
+
+```text
+/dev/input/event1
+```
+
+on systems where automatic device detection succeeds.
+
+Available input devices can still be inspected manually with:
 
 ```bash
 ls /dev/input/
 ```
 
-You can also inspect the devices recognized by Linux:
+Detailed device information can be viewed with:
 
 ```bash
 cat /proc/bus/input/devices
 ```
 
+---
+
 ## Example
 
-After starting the program, normal keyboard input may appear directly:
+After starting the program, normal keyboard input may appear as:
 
 ```text
 Hello World 123
 ```
 
-Special keys are displayed using their mapped names:
+Special keys are displayed using readable names:
 
 ```text
-[ENTER] [TAB] [BACKSPACE]
+Hello[SPACE]World[ENTER]
 ```
 
-The actual special-key representation is colorized in the terminal.
+Other keyboard events may appear as:
+
+```text
+LEFT CTRL
+LEFT ALT
+TAB
+UP
+LEFT
+RIGHT
+BACKSPACE
+DELETE
+F1
+F5
+```
+
+Special keys are colorized in the terminal according to their category.
+
+---
 
 ## Technologies
 
 * **C++**
 * **Linux Input Subsystem**
-* **POSIX/Linux system calls**
+* **Linux Device Files**
+* **POSIX/Linux System Calls**
 * `open()`
 * `read()`
 * `close()`
 * `/dev/input/event*`
 * `linux/input.h`
+* `struct input_event`
+* C++ STL
+* `std::map`
 * ANSI escape sequences
+* Linux keyboard event codes
+
+---
 
 ## Learning Objectives
 
-This project is primarily intended to provide practical experience with:
+This project was created to gain practical experience with:
 
 * Linux device files
+* `/dev/input/`
 * File descriptors
-* Low-level input handling
-* Linux kernel input events
+* Linux input devices
+* Linux input events
+* The Linux Input Subsystem
 * `struct input_event`
 * Keyboard event codes
-* C++ STL containers
+* Low-level event processing
+* C++ system programming
+* POSIX system calls
 * `std::map`
+* Keyboard state management
+* Modifier keys
+* `Shift` and `Caps Lock` interaction
+* Bitwise XOR logic
 * Terminal ANSI escape sequences
-* Bitwise XOR logic for keyboard state handling
-* System-level programming
+* Separating keyboard data from event-processing logic
+* Working with Linux hardware interfaces from user space
+
+---
 
 ## Limitations
 
-The current implementation intentionally remains simple.
+The current implementation remains intentionally lightweight.
 
-* The input device is hardcoded to `/dev/input/event1`.
-* Keyboard layout handling is limited.
-* The database contains manually defined key mappings.
-* It is focused on Linux.
-* It currently displays events rather than providing a configurable logging system.
+* Keyboard layout handling is limited
+* Keyboard mappings are manually defined
+* The implementation is Linux-specific
+* Different keyboard layouts may require additional mappings
+* The current output is primarily designed for terminal display
+* The keyboard database may not contain every possible Linux key code
+
+---
 
 ## Future Improvements
 
-Possible improvements include:
+Possible future improvements include:
 
-* Automatic keyboard device detection
-* Support for multiple keyboard layouts
-* More complete key mapping
-* Configurable input device
-* Better handling of modifier keys
+* Support for additional keyboard layouts
+* More complete keyboard-code mappings
+* Better handling of international keyboard layouts
+* Improved modifier-key handling
 * Timestamped events
-* Cleaner separation between event handling and key mapping
-* Configuration file for keyboard mappings
+* Configurable output formats
+* Configuration files for keyboard mappings
+* Cleaner separation between event processing and presentation
 * Improved error handling
+* Additional Linux input-device support
+
+---
 
 ## Security Notice
 
-This software interacts directly with keyboard input devices and may have access to sensitive keystrokes.
+This software interacts directly with Linux keyboard input devices and may have access to sensitive keystrokes.
 
 **Do not use it to monitor another person's activity, capture credentials, or collect private information without explicit authorization.**
 
-Use it only in your own laboratory, test environment, or other authorized systems.
+Use this project only on systems you own, in your own laboratory, test environment, or on systems where you have explicit permission to monitor keyboard input.
+
+---
 
 ## Author
 
@@ -330,13 +597,13 @@ Use it only in your own laboratory, test environment, or other authorized system
 
 Original author and creator of this project.
 
+---
+
 ## License
 
 Copyright © 2026 **Kaveh Nazem**.
 
 Licensed under the **Apache License, Version 2.0**.
-
-See the [`LICENSE`](LICENSE) file for the complete license text.
 
 ---
 
